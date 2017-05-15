@@ -24,9 +24,6 @@ import scala.util.Random
 object Http2ServerTest extends App {
   val testConf: Config = ConfigFactory.parseString("""
     akka.loglevel = INFO
-    
-    akka.http.server.remote-address-header = on
-    
     akka.log-dead-letters = off
     akka.stream.materializer.debug.fuzzing-mode = off
     akka.actor.serialize-creators = off
@@ -48,7 +45,7 @@ object Http2ServerTest extends App {
   }
 
   val syncHandler: HttpRequest ⇒ HttpResponse = {
-    case req @ HttpRequest(GET, Uri.Path("/"), _, _, _)     ⇒ HttpResponse(200, entity = req.header[headers.`Remote-Address`].toString)
+    case HttpRequest(GET, Uri.Path("/"), _, _, _)           ⇒ index
     case HttpRequest(GET, Uri.Path("/ping"), _, _, _)       ⇒ HttpResponse(entity = "PONG!")
     case HttpRequest(GET, Uri.Path("/image-page"), _, _, _) ⇒ imagePage
     case HttpRequest(GET, Uri(_, _, p, _, _), _, _, _) if p.toString.startsWith("/image1") ⇒

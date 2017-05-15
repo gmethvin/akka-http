@@ -692,7 +692,7 @@ class Http2ServerSpec extends AkkaSpec("""
         lazy val thePort = 1337
         override def modifyServer(server: BidiFlow[HttpResponse, ByteString, ByteString, HttpRequest, NotUsed]) =
           BidiFlow.fromGraph(StreamUtils.fuseAggressive(server).withAttributes(
-            HttpAttributes.remoteAddress(Some(new InetSocketAddress(theAddress, thePort)))
+            HttpAttributes.remoteAddress(new InetSocketAddress(theAddress, thePort))
           ))
 
         val target = Uri("http://www.example.com/")
@@ -703,10 +703,6 @@ class Http2ServerSpec extends AkkaSpec("""
         val remoteAddressHeader = request.header[headers.`Remote-Address`].get
         remoteAddressHeader.address.getAddress.get().toString shouldBe ("/" + theAddress)
         remoteAddressHeader.address.getPort shouldBe thePort
-
-        val streamIdHeader = request.header[Http2StreamIdHeader].getOrElse(Http2Compliance.missingHttpIdHeaderException)
-        responseOut.sendNext(HttpResponse().addHeader(streamIdHeader))
-        val response = expectDecodedResponseHEADERS(1)
       }
 
     }

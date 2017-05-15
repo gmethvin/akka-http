@@ -9,6 +9,7 @@ import akka.http.impl.engine.parsing.HttpHeaderParser
 import akka.http.impl.engine.server.HttpAttributes
 import akka.http.scaladsl.model
 import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.headers.`Remote-Address`
 import akka.http.scaladsl.model.http2.Http2StreamIdHeader
 import akka.http.scaladsl.settings.ServerSettings
 import akka.stream.Attributes
@@ -25,16 +26,11 @@ import scala.collection.immutable.VectorBuilder
 private[http2] object RequestParsing {
 
   def parseRequest(httpHeaderParser: HttpHeaderParser, serverSettings: ServerSettings, attributes: Attributes): Http2SubStream ⇒ HttpRequest = {
-    val remoteAddressHeader =
+    val remoteAddressHeader: Option[`Remote-Address`] =
       if (serverSettings.remoteAddressHeader) {
+        attributes.get[HttpAttributes.RemoteAddress].map(remote ⇒ model.headers.`Remote-Address`(RemoteAddress(remote.address)))
         // in order to avoid searching all the time for the attribute, we need to guard it with the setting condition
-        attributes.get[HttpAttributes.RemoteAddress] match {
-          case Some(remote) if remote.address.isDefined ⇒
-            OptionVal.Some(model.headers.`Remote-Address`(RemoteAddress(remote.address.get)))
-          case _ ⇒
-            OptionVal.None // ignore; remote header was requested in config, however it's not available
-        }
-      } else OptionVal.None // no need to emit the remote address header
+      } else None // no need to emit the remote address header
 
     { subStream ⇒
       @tailrec

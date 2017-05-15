@@ -95,7 +95,7 @@ class Http2Ext(private val config: Config)(implicit val system: ActorSystem)
       case incoming: Tcp.IncomingConnection ⇒
         try {
           val layer =
-            if (settings.remoteAddressHeader) fullLayer().addAttributes(HttpAttributes.remoteAddress(Some(incoming.remoteAddress)))
+            if (settings.remoteAddressHeader) fullLayer().addAttributes(HttpAttributes.remoteAddress(incoming.remoteAddress))
             else fullLayer()
 
           layer.joinMat(incoming.flow)(Keep.left)
