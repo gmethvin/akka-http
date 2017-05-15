@@ -220,6 +220,8 @@ private[http] object StreamUtils {
   /**
    * Lifts the streams attributes into an element and passes them to the function for each passed through element.
    * Similar idea than [[FlowOps.statefulMapConcat]] but for a simple map.
+   *
+   * The result of `Attributes => (T => U)` is cached, and only the `T => U` function will be invoked afterwards for each element.
    */
   def statefulAttrsMap[T, U](functionConstructor: Attributes ⇒ T ⇒ U): Flow[T, U, NotUsed] =
     Flow[T].via(ExposeAttributes[T, U](functionConstructor))
@@ -300,7 +302,8 @@ private[http] object StreamUtils {
   override val shape = FlowShape(in, out)
 
   override def createLogic(inheritedAttributes: Attributes) = new GraphStageLogic(shape) with InHandler with OutHandler {
-    override def onPush(): Unit = push(out, functionConstructor(inheritedAttributes)(grab(in)))
+    val f = functionConstructor(inheritedAttributes)
+    override def onPush(): Unit = push(out, f(grab(in)))
     override def onPull(): Unit = pull(in)
 
     setHandlers(in, out, this)

@@ -686,7 +686,7 @@ class Http2ServerSpec extends AkkaSpec("""
     }
 
     "expose synthetic headers" should {
-      "expose Remote-Address" in new TestSetup with RequestResponseProbes {
+      "expose Remote-Address" in new TestSetup with RequestResponseProbes with AutomaticHpackWireSupport {
 
         lazy val theAddress = "127.0.0.1"
         lazy val thePort = 1337
@@ -695,18 +695,8 @@ class Http2ServerSpec extends AkkaSpec("""
             HttpAttributes.remoteAddress(Some(new InetSocketAddress(theAddress, thePort)))
           ))
 
-        val probe = TestProbe()
-        override def handlerFlow: Flow[HttpRequest, HttpResponse, NotUsed] =
-          Flow.fromSinkAndSource(
-            Flow[HttpRequest].map({ request ⇒
-              probe.ref ! request.header[headers.`Remote-Address`]
-              request
-            }).to(Sink.fromSubscriber(requestIn)),
-            Source.fromPublisher(responseOut)
-          )
-
-        val headerBlock = HPackSpecExamples.C41FirstRequestWithHuffman
-        sendHEADERS(1, endStream = true, endHeaders = true, headerBlockFragment = headerBlock)
+        val target = Uri("http://www.example.com/")
+        sendRequest(1, HttpRequest(uri = target))
         requestIn.ensureSubscription()
 
         val request = expectRequestRaw()
@@ -714,13 +704,9 @@ class Http2ServerSpec extends AkkaSpec("""
         remoteAddressHeader.address.getAddress.get().toString shouldBe ("/" + theAddress)
         remoteAddressHeader.address.getPort shouldBe thePort
 
-        request.method shouldBe HttpMethods.GET
-        request.uri shouldBe Uri("http://www.example.com/")
-
         val streamIdHeader = request.header[Http2StreamIdHeader].getOrElse(Http2Compliance.missingHttpIdHeaderException)
-        responseOut.sendNext(HPackSpecExamples.FirstResponse.addHeader(streamIdHeader))
-        val headerPayload = expectHeaderBlock(1)
-        headerPayload shouldBe HPackSpecExamples.C61FirstResponseWithHuffman
+        responseOut.sendNext(HttpResponse().addHeader(streamIdHeader))
+        val response = expectDecodedResponseHEADERS(1)
       }
 
     }
@@ -1006,10 +992,11 @@ class Http2ServerSpec extends AkkaSpec("""
     }
     def decodeHeadersToResponse(bytes: ByteString): HttpResponse =
       decodeHeaders(bytes).foldLeft(HttpResponse())((old, header) ⇒ header match {
-        case (":status", value)        ⇒ old.copy(status = value.toInt)
-        case ("content-length", value) ⇒ old.copy(entity = HttpEntity.Default(old.entity.contentType, value.toLong, Source.empty))
-        case ("content-type", value)   ⇒ old.copy(entity = old.entity.withContentType(ContentType.parse(value).right.get))
-        case (name, value)             ⇒ old.addHeader(RawHeader(name, value)) // FIXME: decode to modeled headers
+        case (":status", value)                             ⇒ old.copy(status = value.toInt)
+        case ("content-length", value) if value.toLong == 0 ⇒ old.copy(entity = HttpEntity.Empty)
+        case ("content-length", value)                      ⇒ old.copy(entity = HttpEntity.Default(old.entity.contentType, value.toLong, Source.empty))
+        case ("content-type", value)                        ⇒ old.copy(entity = old.entity.withContentType(ContentType.parse(value).right.get))
+        case (name, value)                                  ⇒ old.addHeader(RawHeader(name, value)) // FIXME: decode to modeled headers
       })
   }
 
